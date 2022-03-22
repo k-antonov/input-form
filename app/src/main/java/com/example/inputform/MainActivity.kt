@@ -2,11 +2,12 @@ package com.example.inputform
 
 import android.os.Bundle
 import android.text.Editable
-import android.text.TextWatcher
 import android.util.Log
-import android.widget.Toast
+import android.view.View
+import android.view.inputmethod.InputMethodManager
 import androidx.appcompat.app.AppCompatActivity
 import com.example.inputform.databinding.ActivityMainBinding
+import com.google.android.material.snackbar.Snackbar
 import com.google.android.material.textfield.TextInputEditText
 
 const val TAG = "MainActivity"
@@ -19,22 +20,11 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        binding.loginEditText.addTextChangedListener(textWatcher)
-    }
-
-    private val textWatcher: TextWatcher = object : SimpleTextWatcher() {
-        override fun afterTextChanged(str: Editable?) {
-            Log.d(TAG, "afterTextChanged called with $str")
-            var input = str.toString()
-
-            // todo fix bug: unable to delete text after "@g"
-            if (input.endsWith("@g")) {
-                Log.d("SimpleTextWatcher", "before setTextCorrectly called")
-                input = "${input}mail.com"
-                setText(input)
-            }
-
-            processInputError(input)
+        binding.loginEditText.listenForChanges {
+            binding.textInputLayout.isErrorEnabled = false
+        }
+        binding.loginButton.setOnClickListener {
+            processInputError(binding.loginEditText.text.toString())
         }
     }
 
@@ -46,22 +36,28 @@ class MainActivity : AppCompatActivity() {
         binding.textInputLayout.error = error
 
         if (isValid) {
-            Toast.makeText(
-                this@MainActivity,
+            binding.loginButton.isEnabled = false
+
+            hideKeyboard(binding.loginEditText)
+            Snackbar.make(
+                binding.loginButton,
                 getString(R.string.valid_email),
-                Toast.LENGTH_SHORT
+                Snackbar.LENGTH_SHORT
             ).show()
         }
     }
 
-    private fun setText(text: String) {
-        binding.loginEditText.removeTextChangedListener(textWatcher)
-        binding.loginEditText.setTextCorrectly(text)
-        binding.loginEditText.addTextChangedListener(textWatcher)
+    private fun TextInputEditText.listenForChanges(func: (text: String) -> Unit) {
+        addTextChangedListener(object : SimpleTextWatcher() {
+            override fun afterTextChanged(str: Editable?) {
+                func.invoke(str.toString())
+            }
+        })
     }
 
-    private fun TextInputEditText.setTextCorrectly(text: CharSequence) {
-        setText(text)
-        setSelection(text.length)
+    private fun AppCompatActivity.hideKeyboard(view: View) {
+        val inputMethodManager = this.getSystemService(AppCompatActivity.INPUT_METHOD_SERVICE)
+                as InputMethodManager
+        inputMethodManager.hideSoftInputFromWindow(view.windowToken, 0)
     }
 }
