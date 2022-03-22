@@ -5,11 +5,16 @@ import android.text.Editable
 import android.util.Log
 import android.view.View
 import android.view.inputmethod.InputMethodManager
+import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.example.inputform.databinding.ActivityMainBinding
 import com.google.android.material.snackbar.Snackbar
 import com.google.android.material.textfield.TextInputEditText
+import com.google.android.material.textfield.TextInputLayout
+import java.util.regex.Pattern
 
+const val PASSWORD_PATTERN = "^(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z])(?=." +
+        "*[\\\\\\/%§\"&“|`´}{°><:.;#')(@_\$\"!?*=^-]).{8,}\$"
 const val TAG = "MainActivity"
 
 class MainActivity : AppCompatActivity() {
@@ -20,28 +25,45 @@ class MainActivity : AppCompatActivity() {
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
+        // todo somehow get rid of code duplication
         binding.loginEditText.listenForChanges {
-            binding.textInputLayout.isErrorEnabled = false
+            binding.loginInputLayout.isErrorEnabled = false
+        }
+        binding.passwordEditText.listenForChanges {
+            binding.passwordInputLayout.isErrorEnabled = false
         }
         binding.loginButton.setOnClickListener {
-            processInputError(binding.loginEditText.text.toString())
+            processInputErrors(
+                binding.loginEditText.text.toString(),
+                binding.passwordEditText.text.toString()
+            )
         }
+
     }
 
-    private fun processInputError(input: String) {
-        Log.d(TAG, "processInputError called")
-        val isValid = android.util.Patterns.EMAIL_ADDRESS.matcher(input).matches()
-        binding.textInputLayout.isErrorEnabled = !isValid
-        val error = if (isValid) "" else getString(R.string.invalid_email)
-        binding.textInputLayout.error = error
+    private fun processInputErrors(login: String, password: String) {
+        Log.d(TAG, "processInputErrors called")
 
-        if (isValid) {
+        // How to move duplicate code to separate function
+        // if it is impossible to access binding.param,
+        // where param: TextInputLayout?
+        val isLoginValid = android.util.Patterns.EMAIL_ADDRESS.matcher(login).matches()
+        binding.loginInputLayout.isErrorEnabled = !isLoginValid
+        val loginError = if (isLoginValid) "" else getString(R.string.invalid_email)
+        binding.loginInputLayout.error = loginError
+
+        val isPasswordValid = Pattern.compile(PASSWORD_PATTERN).matcher(password).matches()
+        binding.passwordInputLayout.isErrorEnabled = !isPasswordValid
+        val passwordError = if (isPasswordValid) "" else getString(R.string.invalid_password)
+        binding.passwordInputLayout.error = passwordError
+
+        if (isLoginValid && isPasswordValid) {
             binding.loginButton.isEnabled = false
 
             hideKeyboard(binding.loginEditText)
             Snackbar.make(
                 binding.loginButton,
-                getString(R.string.valid_email),
+                getString(R.string.logged_in),
                 Snackbar.LENGTH_SHORT
             ).show()
         }
