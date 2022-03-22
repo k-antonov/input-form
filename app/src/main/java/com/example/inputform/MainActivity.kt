@@ -5,12 +5,10 @@ import android.text.Editable
 import android.util.Log
 import android.view.View
 import android.view.inputmethod.InputMethodManager
-import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import com.example.inputform.databinding.ActivityMainBinding
 import com.google.android.material.snackbar.Snackbar
 import com.google.android.material.textfield.TextInputEditText
-import com.google.android.material.textfield.TextInputLayout
 import java.util.regex.Pattern
 
 const val PASSWORD_PATTERN = "^(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z])(?=." +
@@ -33,20 +31,30 @@ class MainActivity : AppCompatActivity() {
             binding.passwordInputLayout.isErrorEnabled = false
         }
         binding.loginButton.setOnClickListener {
-            processInputErrors(
+            val isInputValid = processInputErrors(
                 binding.loginEditText.text.toString(),
                 binding.passwordEditText.text.toString()
             )
+            if (isInputValid) {
+                onLoggedIn()
+            }
         }
-
     }
 
-    private fun processInputErrors(login: String, password: String) {
+    override fun onRestoreInstanceState(savedInstanceState: Bundle) {
+        super.onRestoreInstanceState(savedInstanceState)
+        processInputErrors(
+            binding.loginEditText.text.toString(),
+            binding.passwordEditText.text.toString()
+        )
+    }
+
+    private fun processInputErrors(login: String, password: String) : Boolean {
         Log.d(TAG, "processInputErrors called")
 
         // How to move duplicate code to separate function
         // if it is impossible to access binding.param,
-        // where param: TextInputLayout?
+        // where param: TextInputLayout ?
         val isLoginValid = android.util.Patterns.EMAIL_ADDRESS.matcher(login).matches()
         binding.loginInputLayout.isErrorEnabled = !isLoginValid
         val loginError = if (isLoginValid) "" else getString(R.string.invalid_email)
@@ -57,16 +65,18 @@ class MainActivity : AppCompatActivity() {
         val passwordError = if (isPasswordValid) "" else getString(R.string.invalid_password)
         binding.passwordInputLayout.error = passwordError
 
-        if (isLoginValid && isPasswordValid) {
-            binding.loginButton.isEnabled = false
+        return isLoginValid && isPasswordValid
+    }
 
-            hideKeyboard(binding.loginEditText)
-            Snackbar.make(
-                binding.loginButton,
-                getString(R.string.logged_in),
-                Snackbar.LENGTH_SHORT
-            ).show()
-        }
+    private fun onLoggedIn() {
+        binding.loginButton.isEnabled = false
+
+        hideKeyboard(binding.loginEditText)
+        Snackbar.make(
+            binding.loginButton,
+            getString(R.string.logged_in),
+            Snackbar.LENGTH_SHORT
+        ).show()
     }
 
     private fun TextInputEditText.listenForChanges(func: (text: String) -> Unit) {
