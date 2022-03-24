@@ -18,17 +18,29 @@ import java.util.regex.Pattern
 const val PASSWORD_PATTERN = "^(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z])(?=." +
         "*[\\\\\\/%§\"&“|`´}{°><:.;#')(@_\$\"!?*=^-]).{8,}\$"
 const val TAG = "MainActivity"
+const val KEY_STATE = "State"
 
 class MainActivity : AppCompatActivity() {
     private lateinit var binding: ActivityMainBinding
+
+    private companion object {
+        const val INITIAL = "Initial"
+        const val INPUT_ERROR = "Input Error"
+        const val PROGRESS = "Progress"
+        const val SUCCESS = "Success"
+        const val FAILED = "Failed"
+    }
+
+    private var state = INITIAL
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         binding = ActivityMainBinding.inflate(layoutInflater)
         setContentView(binding.root)
 
-        listenForChanges(binding.loginEditText, binding.loginInputLayout)
-        listenForChanges(binding.passwordEditText, binding.passwordInputLayout)
+        if (savedInstanceState != null) {
+            state = savedInstanceState.getString(KEY_STATE, state)
+        }
 
         binding.loginButton.setOnClickListener {
             val isInputValid = processInputErrors(
@@ -47,28 +59,54 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun listenForChanges(editText: TextInputEditText, textInputLayout: TextInputLayout) {
-        editText.listenForChanges { textInputLayout.isErrorEnabled = false }
+    override fun onSaveInstanceState(outState: Bundle) {
+        super.onSaveInstanceState(outState)
+        outState.putString(KEY_STATE, state)
     }
 
-    override fun onRestoreInstanceState(savedInstanceState: Bundle) {
-        super.onRestoreInstanceState(savedInstanceState)
-        processInputErrors(
-            binding.loginEditText.text.toString(),
-            binding.passwordEditText.text.toString()
-        )
+    private val textWatcher = object : SimpleTextWatcher() {
+        override fun afterTextChanged(str: Editable?) {
+            binding.loginInputLayout.isErrorEnabled = false
+            binding.passwordInputLayout.isErrorEnabled = false
+        }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        binding.loginEditText.removeTextChangedListener(textWatcher)
+        binding.passwordEditText.removeTextChangedListener(textWatcher)
+    }
+
+    override fun onResume() {
+        super.onResume()
+        Log.d(TAG, "onResume state: $state")
+        binding.loginEditText.addTextChangedListener(textWatcher)
+        binding.passwordEditText.addTextChangedListener(textWatcher)
+
+        when (state) {
+            INITIAL -> { switchViewsVisibility(true) }
+            FAILED -> { showDialog() }
+            INPUT_ERROR -> processInputErrors(
+                binding.loginEditText.text.toString(),
+                binding.passwordEditText.text.toString()
+            )
+            PROGRESS -> {
+                switchViewsVisibility(false)
+                state = FAILED
+            }
+        }
     }
 
     private fun processInputErrors(login: String, password: String) : Boolean {
-        Log.d(TAG, "processInputErrors called")
-
         val isLoginValid = android.util.Patterns.EMAIL_ADDRESS.matcher(login).matches()
         handleTextInputLayoutError(binding.loginInputLayout, isLoginValid, getString(R.string.invalid_email))
 
         val isPasswordValid = Pattern.compile(PASSWORD_PATTERN).matcher(password).matches()
         handleTextInputLayoutError(binding.passwordInputLayout, isPasswordValid, getString(R.string.invalid_password))
 
-        return isLoginValid && isPasswordValid
+        val isCorrect = isLoginValid && isPasswordValid
+        if (!isCorrect) state = INPUT_ERROR
+        return isCorrect
     }
 
     private fun handleTextInputLayoutError(
@@ -81,32 +119,28 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun onLoggedIn() {
-        fun switchViewsVisibility() {
-            binding.loginInputLayout.isEnabled = !binding.loginInputLayout.isEnabled
-            binding.passwordInputLayout.isEnabled = !binding.passwordInputLayout.isEnabled
-            binding.checkbox.isEnabled = !binding.checkbox.isEnabled
-            binding.loginButton.isEnabled = !binding.loginButton.isEnabled
-            binding.progressBar.visibility = if (binding.progressBar.visibility == View.VISIBLE)
-                View.INVISIBLE else View.VISIBLE
-        }
-
-        switchViewsVisibility()
+        switchViewsVisibility(false)
+        state = PROGRESS
         hideKeyboard(binding.loginEditText)
 
         Handler(Looper.myLooper()!!).postDelayed({
-            AlertDialog.Builder(this).setMessage(R.string.service_unavailable).show()
-            switchViewsVisibility()
+            showDialog()
+            switchViewsVisibility(true)
         }, 3000)
     }
 
-
-    private fun TextInputEditText.listenForChanges(func: (text: String) -> Unit) {
-        addTextChangedListener(object : SimpleTextWatcher() {
-            override fun afterTextChanged(str: Editable?) {
-                func.invoke(str.toString())
-            }
-        })
+    private fun switchViewsVisibility(flag: Boolean) {
+        binding.loginInputLayout.isEnabled = flag
+        binding.passwordInputLayout.isEnabled = flag
+        binding.checkbox.isEnabled = flag
+        binding.loginButton.isEnabled = flag
+        binding.progressBar.visibility = if (flag) View.INVISIBLE else View.VISIBLE
     }
+
+    private fun showDialog() = AlertDialog.Builder(this)
+        .setOnCancelListener { state = INITIAL }
+        .setMessage(R.string.service_unavailable).show()
+        .also { state = FAILED }
 
     private fun AppCompatActivity.hideKeyboard(view: View) {
         val inputMethodManager = this.getSystemService(AppCompatActivity.INPUT_METHOD_SERVICE)
